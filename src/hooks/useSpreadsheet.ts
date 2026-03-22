@@ -494,3 +494,38 @@ export function generateLocalInsights(data: SheetData, kpis: KPI[]): InsightCard
 
   return insights;
 }
+
+export function recalculateKPI(kpi: KPI, data: SheetData, newLabel: string, newColumn: string, aggregation: 'sum' | 'avg' | 'count'): KPI {
+  const col = data.columns.find(c => c.name === newColumn);
+  if (!col) return kpi;
+
+  const nums = col.type === 'numeric' 
+    ? (col.values.filter(v => typeof v === 'number') as number[])
+    : [];
+
+  let rawValue = 0;
+  if (aggregation === 'sum') {
+    rawValue = nums.reduce((a, b) => a + b, 0);
+  } else if (aggregation === 'avg') {
+    rawValue = nums.length > 0 ? nums.reduce((a, b) => a + b, 0) / nums.length : 0;
+  } else if (aggregation === 'count') {
+    rawValue = col.values.filter(v => v !== null && v !== '').length;
+  }
+
+  const formatVal = (n: number) => {
+    if (Math.abs(n) >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
+    if (Math.abs(n) >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+    return n.toFixed(n % 1 === 0 ? 0 : 2);
+  };
+
+  return {
+    ...kpi,
+    label: newLabel,
+    column: newColumn,
+    aggregation,
+    rawValue,
+    value: formatVal(rawValue),
+    trend: undefined,
+    trendUp: undefined,
+  };
+}

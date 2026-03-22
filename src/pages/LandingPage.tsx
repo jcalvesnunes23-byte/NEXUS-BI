@@ -626,9 +626,6 @@ export const LandingPage = ({ onEnter, onLogin, onSignUp }: LandingPageProps) =>
       {/* Footer */}
       <footer className="py-10 text-center border-t border-white/[0.06]">
         <div className="flex items-center justify-center gap-2 mb-3">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #7C3AED, #38BDF8)' }}>
-            <BarChart3 size={14} className="text-white" />
-          </div>
           <span className="font-black text-white text-lg" style={{ fontFamily: "'Outfit', sans-serif" }}>NEXUS BI</span>
         </div>
         <p className="text-slate-600 text-sm">© 2026 NEXUS Inteligência Artificial. Todos os direitos reservados.</p>

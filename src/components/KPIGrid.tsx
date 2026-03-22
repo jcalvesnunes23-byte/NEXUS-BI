@@ -5,9 +5,10 @@ import { KPI } from '../types';
 interface KPIGridProps { 
   kpis: KPI[];
   onRemove?: (id: string) => void;
+  onEdit?: (kpi: KPI) => void;
 }
 
-export const KPIGrid = ({ kpis, onRemove }: KPIGridProps) => (
+export const KPIGrid = ({ kpis, onRemove, onEdit }: KPIGridProps) => (
   <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
     {kpis.map((k, i) => (
       <motion.div
@@ -25,16 +26,28 @@ export const KPIGrid = ({ kpis, onRemove }: KPIGridProps) => (
           className="absolute inset-0 opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-none rounded-2xl"
           style={{ background: 'linear-gradient(135deg, var(--primary)08, var(--accent)05)' }}
         />
-        {onRemove && (
-           <button
-             onClick={() => onRemove(k.id)}
-             className="absolute top-3 right-3 w-5 h-5 rounded-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-20 hover:scale-110"
-             style={{ background: '#DC262620', color: '#EF4444', fontSize: '10px', fontWeight: 'bold' }}
-             title="Remover KPI"
-           >
-             ✕
-           </button>
-        )}
+            <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all z-20">
+              {onEdit && (
+                <button
+                  onClick={() => onEdit(k)}
+                  className="w-5 h-5 rounded-md flex items-center justify-center hover:scale-110"
+                  style={{ background: 'var(--primary)20', color: 'var(--primary)', fontSize: '10px' }}
+                  title="Editar KPI"
+                >
+                  ✎
+                </button>
+              )}
+              {onRemove && (
+                <button
+                  onClick={() => onRemove(k.id)}
+                  className="w-5 h-5 rounded-md flex items-center justify-center hover:scale-110"
+                  style={{ background: '#DC262620', color: '#EF4444', fontSize: '10px', fontWeight: 'bold' }}
+                  title="Remover KPI"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
         <div className="flex items-center justify-between relative z-10 pr-6">
           <span className="text-2xl">{k.icon}</span>
           {k.trend !== undefined && (

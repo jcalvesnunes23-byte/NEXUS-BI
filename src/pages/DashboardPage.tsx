@@ -9,6 +9,7 @@ import { InsightCards } from '../components/InsightCards';
 import { FilterPanel } from '../components/FilterPanel';
 import { DataEditorModal } from '../components/DataEditorModal';
 import { WidgetBuilderModal } from '../components/WidgetBuilderModal';
+import { KPIEditorModal } from '../components/KPIEditorModal';
 import { generateKPIs, generateCharts, generateLocalInsights } from '../hooks/useSpreadsheet';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -44,6 +45,7 @@ export const DashboardPage = ({
   const [isExporting, setIsExporting] = useState(false);
   const [showEditor, setShowEditor] = useState(false);
   const [showBuilder, setShowBuilder] = useState(false);
+  const [editingKpi, setEditingKpi] = useState<KPI | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -208,7 +210,11 @@ export const DashboardPage = ({
           {/* KPI Grid */}
           {kpis.length > 0 && (
             <motion.div custom={1} initial="hidden" animate="visible" variants={fadeInUp}>
-              <KPIGrid kpis={kpis} onRemove={(id) => setKpis(prev => prev.filter(k => k.id !== id))} />
+              <KPIGrid 
+                 kpis={kpis} 
+                 onRemove={(id) => setKpis(prev => prev.filter(k => k.id !== id))} 
+                 onEdit={(k) => setEditingKpi(k)}
+              />
             </motion.div>
           )}
 
@@ -294,6 +300,21 @@ export const DashboardPage = ({
                 onClose={() => setShowBuilder(false)}
                 onAddKPI={(k) => { setKpis(prev => [...prev, k]); setShowBuilder(false); }}
                 onAddChart={(c) => { setCharts(prev => [...prev, c]); setShowBuilder(false); }}
+              />
+            )}
+          </AnimatePresence>
+
+          {/* KPI Editor Modal */}
+          <AnimatePresence>
+            {editingKpi && (
+              <KPIEditorModal
+                kpi={editingKpi}
+                data={data}
+                onClose={() => setEditingKpi(null)}
+                onSave={(updatedKpi) => {
+                  setKpis(prev => prev.map(k => k.id === updatedKpi.id ? updatedKpi : k));
+                  setEditingKpi(null);
+                }}
               />
             )}
           </AnimatePresence>

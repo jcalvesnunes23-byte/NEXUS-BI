@@ -51,6 +51,7 @@ export interface KPI {
   trendUp?: boolean;
   icon: string;
   column: string;
+  aggregation?: 'sum' | 'avg' | 'count';
 }
 
 export type ChartType = 'bar' | 'line' | 'pie' | 'area' | 'donut';
