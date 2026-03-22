@@ -10,11 +10,14 @@ export function useFileSystem() {
   const [items, setItems] = useState<FileSystemItem[]>(defaultFS);
   const [userId, setUserId] = useState<string | null>(null);
 
-  // Load from Supabase on mount
+  // Load from Supabase on mount and auth changes
   useEffect(() => {
-    const fetchFS = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) return;
+    const fetchFS = async (session: any) => {
+      if (!session?.user) {
+        setItems(defaultFS);
+        setUserId(null);
+        return;
+      }
       setUserId(session.user.id);
 
       const { data, error } = await supabase.from('files').select('*').eq('user_id', session.user.id);
@@ -42,7 +45,16 @@ export function useFileSystem() {
         ]);
       }
     };
-    fetchFS();
+
+    supabase.auth.getSession().then(({ data: { session } }) => fetchFS(session));
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      fetchFS(session);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const createFolder = useCallback(async (name: string, parentId: string) => {
