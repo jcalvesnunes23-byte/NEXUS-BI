@@ -22,18 +22,30 @@ export const DataEditorModal = ({ data, theme, onClose, onSave }: DataEditorModa
   };
 
   const handleCellBlur = (internalId: number, colName: string, newValue: string) => {
-    setLocalData(prev => prev.map(row => 
-      row._internalId === internalId 
-        ? { ...row, [colName]: newValue } 
-        : row
-    ));
-  };
+    let triggeredSave = false;
+    let newCleanData: Record<string, unknown>[] = [];
+    
+    setLocalData(prev => {
+      const rowToUpdate = prev.find(r => r._internalId === internalId);
+      if (rowToUpdate && String(rowToUpdate[colName] ?? '') === newValue) {
+        return prev; // no changes
+      }
 
-  const handleSave = () => {
-    // Remove o _internalId antes de salvar para não sujar o rawData final
-    const cleanData = localData.map(({ _internalId, ...rest }) => rest);
-    const newData = rebuildSheetData(cleanData, data.fileName, data.sheetNames, data.activeSheet);
-    onSave(newData);
+      const nextData = prev.map(row => 
+        row._internalId === internalId 
+          ? { ...row, [colName]: newValue } 
+          : row
+      );
+
+      newCleanData = nextData.map(({ _internalId, ...rest }) => rest);
+      triggeredSave = true;
+      return nextData;
+    });
+
+    if (triggeredSave) {
+      const newData = rebuildSheetData(newCleanData, data.fileName, data.sheetNames, data.activeSheet);
+      onSave(newData);
+    }
   };
 
   const filteredData = useMemo(() => {
@@ -153,20 +165,15 @@ export const DataEditorModal = ({ data, theme, onClose, onSave }: DataEditorModa
         </div>
 
         <div className="flex items-center justify-end p-4 border-t gap-3" style={{ borderColor: theme.border }}>
+          <span className="text-xs mr-auto opacity-50" style={{ color: theme.text }}>
+            As alterações são salvas automaticamente
+          </span>
           <button 
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-sm font-semibold transition-all hover:bg-white/5"
-            style={{ color: theme.text }}
+            className="px-6 py-2 rounded-xl text-sm font-bold transition-all hover:bg-white/10"
+            style={{ background: 'var(--bg-input)', color: theme.text, border: `1px solid ${theme.border}` }}
           >
-            Cancelar
-          </button>
-          <button 
-            onClick={handleSave}
-            className="flex items-center gap-2 px-6 py-2 rounded-xl text-sm font-bold transition-all hover:opacity-90 hover:scale-[1.02]"
-            style={{ background: `linear-gradient(135deg, ${theme.primary}, ${theme.accent})`, color: '#fff' }}
-          >
-            <Save size={16} />
-            Salvar e Atualizar Dashboard
+            Fechar Editor
           </button>
         </div>
       </div>

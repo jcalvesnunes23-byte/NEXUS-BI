@@ -318,7 +318,6 @@ export const DashboardPage = ({
                 onClose={() => setShowEditor(false)}
                 onSave={(newData) => {
                   onUpdateData(newData);
-                  setShowEditor(false);
                 }}
               />
             )}
