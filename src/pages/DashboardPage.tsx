@@ -231,7 +231,7 @@ export const DashboardPage = ({
                 className="overflow-hidden"
               >
                 <FilterPanel 
-                  columns={data.columns} 
+                  data={data} 
                   filters={activeFilters} 
                   onFilterChange={(col, val) => setActiveFilters(prev => ({ ...prev, [col]: val }))} 
                 />

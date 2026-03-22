@@ -1,14 +1,14 @@
 import React from 'react';
-import { SheetColumn } from '../types';
+import { SheetData } from '../types';
 import { Filter, Calendar, Type, Hash } from 'lucide-react';
 
 interface FilterPanelProps {
-  columns: SheetColumn[];
+  data: SheetData;
   filters: Record<string, string>;
   onFilterChange: (column: string, value: string) => void;
 }
 
-export const FilterPanel = ({ columns, filters, onFilterChange }: FilterPanelProps) => (
+export const FilterPanel = ({ data, filters, onFilterChange }: FilterPanelProps) => (
   <div className="rounded-2xl p-5" style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
     <div className="flex items-center gap-2 mb-4">
       <Filter size={16} style={{ color: 'var(--primary)' }} />
@@ -16,14 +16,21 @@ export const FilterPanel = ({ columns, filters, onFilterChange }: FilterPanelPro
     </div>
     
     <div className="flex flex-wrap gap-3">
-      {columns.slice(0, 4).map(col => {
+      {data.columns.map(col => {
         let Icon = Type;
         if (col.type === 'numeric') Icon = Hash;
         if (col.type === 'date') Icon = Calendar;
         
+        const uniqueVals = Array.from(new Set(data.rawData.map(r => String(r[col.name] ?? ''))))
+          .filter(v => typeof v === 'string' && v.trim() !== '')
+          .sort();
+        
+        // Se a coluna só tiver 1 valor ou 0 valores e não for algo já filtrado, podemos opcionalmente ocultar, 
+        // mas vamos manter para ter o mesmo comportamento do Editar Dados.
+
         return (
           <div key={col.name} className="flex flex-col gap-1.5 min-w-[150px] flex-1">
-            <span className="text-[10px] uppercase font-bold tracking-wider flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+            <span className="text-[10px] uppercase font-bold tracking-wider flex items-center gap-1.5 truncate" style={{ color: 'var(--text-muted)' }}>
               <Icon size={12} /> {col.name}
             </span>
             <select 
@@ -33,8 +40,8 @@ export const FilterPanel = ({ columns, filters, onFilterChange }: FilterPanelPro
               style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text)' }}
             >
               <option value="">Todos</option>
-              {col.unique && col.unique.slice(0, 50).map(u => (
-                <option key={u} value={u}>{u}</option>
+              {uniqueVals.map(u => (
+                <option key={u} value={u}>{u.slice(0, 40)}{u.length > 40 ? '...' : ''}</option>
               ))}
             </select>
           </div>
