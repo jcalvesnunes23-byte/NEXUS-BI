@@ -48,6 +48,7 @@ function App() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [isImporting, setIsImporting] = useState(false);
   const [showVault, setShowVault] = useState(false);
+  const [vaultFolderId, setVaultFolderId] = useState<string>('root');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Trial / plan state
@@ -170,6 +171,10 @@ function App() {
       setDashboardMode('saved');
       setIsImporting(false);
       setShowVault(false);
+    } else if (item.type === 'folder') {
+      setVaultFolderId(item.id);
+      setShowVault(true);
+      setIsImporting(false);
     }
   };
 
@@ -418,7 +423,7 @@ function App() {
         onMove={moveItem}
         getChildren={getChildren}
         onImport={() => { handleRequestImport(); setMobileMenuOpen(false); }}
-        onOpenVault={() => { setShowVault(true); setIsImporting(false); setActiveItem(null); setMobileMenuOpen(false); }}
+        onOpenVault={() => { setShowVault(true); setIsImporting(false); setActiveItem(null); setMobileMenuOpen(false); setVaultFolderId('root'); }}
         mobileOpen={mobileMenuOpen}
         onCloseMobile={() => setMobileMenuOpen(false)}
         userFullName={userFullName}
@@ -439,6 +444,8 @@ function App() {
                 <motion.div key="vault" {...pageVariants}>
                   <FileManagerPage
                     items={items}
+                    currentFolderId={vaultFolderId}
+                    onNavigateFolder={setVaultFolderId}
                     getChildren={getChildren}
                     onCreateFolder={createFolder}
                     onDelete={deleteItem}
@@ -496,7 +503,7 @@ function App() {
                       Nova Importação
                     </button>
                     <button
-                      onClick={() => { setShowVault(true); setIsImporting(false); }}
+                      onClick={() => { setShowVault(true); setIsImporting(false); setVaultFolderId('root'); }}
                       className="px-6 py-3 rounded-xl font-bold transition-all hover:scale-105"
                       style={{ background: 'var(--bg-input)', color: 'var(--text)', border: '1px solid var(--border)' }}
                     >

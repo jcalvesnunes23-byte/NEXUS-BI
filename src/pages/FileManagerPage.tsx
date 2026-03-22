@@ -4,6 +4,8 @@ import { Folder, LayoutDashboard, ChevronRight, Plus, Trash2, Pencil, ArrowLeft 
 
 interface FileManagerPageProps {
   items: FileSystemItem[];
+  currentFolderId: string;
+  onNavigateFolder: (id: string) => void;
   getChildren: (id: string) => FileSystemItem[];
   onCreateFolder: (name: string, parentId: string) => void;
   onDelete: (id: string) => void;
@@ -12,8 +14,7 @@ interface FileManagerPageProps {
   onOpenItem: (item: FileSystemItem) => void;
 }
 
-export const FileManagerPage = ({ items, getChildren, onCreateFolder, onDelete, onRename, onMove, onOpenItem }: FileManagerPageProps) => {
-  const [currentFolderId, setCurrentFolderId] = useState<string>('root');
+export const FileManagerPage = ({ items, currentFolderId, onNavigateFolder, getChildren, onCreateFolder, onDelete, onRename, onMove, onOpenItem }: FileManagerPageProps) => {
   const [ctx, setCtx] = useState<{ id: string, x: number, y: number } | null>(null);
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
@@ -60,7 +61,7 @@ export const FileManagerPage = ({ items, getChildren, onCreateFolder, onDelete, 
           {getBreadcrumbs().map((crumb, idx, arr) => (
             <React.Fragment key={crumb.id}>
               <button 
-                onClick={() => setCurrentFolderId(crumb.id)}
+                onClick={() => onNavigateFolder(crumb.id)}
                 className="hover:opacity-70 transition-opacity"
                 style={{ color: idx === arr.length - 1 ? 'var(--text)' : 'var(--text-muted)' }}
               >
@@ -130,7 +131,7 @@ export const FileManagerPage = ({ items, getChildren, onCreateFolder, onDelete, 
               // Prevent context menu state clearing from bubbling up if item is clicked
               e.stopPropagation();
               setCtx(null);
-              if (item.type === 'folder') setCurrentFolderId(item.id);
+              if (item.type === 'folder') onNavigateFolder(item.id);
               else onOpenItem(item);
             }}
             onContextMenu={e => {
