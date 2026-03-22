@@ -10,7 +10,7 @@ import { FilterPanel } from '../components/FilterPanel';
 import { DataEditorModal } from '../components/DataEditorModal';
 import { WidgetBuilderModal } from '../components/WidgetBuilderModal';
 import { KPIEditorModal } from '../components/KPIEditorModal';
-import { generateKPIs, generateCharts, generateLocalInsights } from '../hooks/useSpreadsheet';
+import { generateKPIs, generateCharts, generateLocalInsights, applyFilters, recalculateChart, recalculateKPI } from '../hooks/useSpreadsheet';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface DashboardPageProps {
@@ -41,6 +41,7 @@ export const DashboardPage = ({
   const [kpis, setKpis] = useState<KPI[]>([]);
   const [charts, setCharts] = useState<ChartConfig[]>([]);
   const [insights, setInsights] = useState<InsightCard[]>([]);
+  const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const [showFilters, setShowFilters] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [showEditor, setShowEditor] = useState(false);
@@ -48,10 +49,37 @@ export const DashboardPage = ({
   const [editingKpi, setEditingKpi] = useState<KPI | null>(null);
   const [ready, setReady] = useState(false);
 
+  const hasActiveFilters = React.useMemo(() => Object.values(activeFilters).some(v => v !== ''), [activeFilters]);
+
+  const filteredData = React.useMemo(() => {
+    if (!data || !hasActiveFilters) return data;
+    return applyFilters(data, activeFilters);
+  }, [data, activeFilters, hasActiveFilters]);
+
+  const displayKpis = React.useMemo(() => {
+    if (!hasActiveFilters || !filteredData) return kpis;
+    return kpis.map(k => {
+      let agg: 'sum' | 'avg' | 'count' = k.aggregation || 'sum';
+      if (!k.aggregation && k.label.toLowerCase().includes('média')) agg = 'avg';
+      return recalculateKPI(k, filteredData, k.label, k.column, agg);
+    });
+  }, [kpis, filteredData, activeFilters, hasActiveFilters]);
+
+  const displayCharts = React.useMemo(() => {
+    if (!hasActiveFilters || !filteredData) return charts;
+    return charts.map(c => recalculateChart(c, filteredData));
+  }, [charts, filteredData, activeFilters, hasActiveFilters]);
+
+  const displayInsights = React.useMemo(() => {
+    if (!hasActiveFilters || !filteredData) return insights;
+    return generateLocalInsights(filteredData, displayKpis);
+  }, [insights, filteredData, activeFilters, displayKpis, hasActiveFilters]);
+
   useEffect(() => {
     setReady(false);
     // Tiny delay so the exit animation of previous data can play
     const t = setTimeout(() => {
+      setActiveFilters({});
       if (mode === 'saved') {
         setKpis(savedKpis || []);
         setCharts(savedCharts || []);
@@ -71,7 +99,7 @@ export const DashboardPage = ({
       setReady(true);
     }, 120);
     return () => clearTimeout(t);
-  }, [data, mode]);
+  }, [data, mode, savedKpis, savedCharts, savedInsights]);
 
   useEffect(() => {
     if (ready && onChangeElements) {
@@ -202,7 +230,11 @@ export const DashboardPage = ({
                 transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
                 className="overflow-hidden"
               >
-                <FilterPanel columns={data.columns} />
+                <FilterPanel 
+                  columns={data.columns} 
+                  filters={activeFilters} 
+                  onFilterChange={(col, val) => setActiveFilters(prev => ({ ...prev, [col]: val }))} 
+                />
               </motion.div>
             )}
           </AnimatePresence>
@@ -211,7 +243,7 @@ export const DashboardPage = ({
           {kpis.length > 0 && (
             <motion.div custom={1} initial="hidden" animate="visible" variants={fadeInUp}>
               <KPIGrid 
-                 kpis={kpis} 
+                 kpis={displayKpis} 
                  onRemove={(id) => setKpis(prev => prev.filter(k => k.id !== id))} 
                  onEdit={(k) => setEditingKpi(k)}
               />
@@ -220,7 +252,7 @@ export const DashboardPage = ({
 
           {/* Charts Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {charts.map((config, i) => (
+            {displayCharts.map((config, i) => (
               <motion.div
                 key={config.id}
                 custom={i + 2}
@@ -273,7 +305,7 @@ export const DashboardPage = ({
               className="mt-8 pt-6 border-t"
               style={{ borderColor: 'var(--border)' }}
             >
-              <InsightCards insights={insights} onRegenerate={() => {}} loading={false} onRemove={(id) => setInsights(prev => prev.filter(i => i.id !== id))} />
+              <InsightCards insights={displayInsights} onRegenerate={() => {}} loading={false} onRemove={(id) => setInsights(prev => prev.filter(i => i.id !== id))} />
             </motion.div>
           )}
 

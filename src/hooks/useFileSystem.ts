@@ -23,7 +23,7 @@ export function useFileSystem() {
         const dbItems: FileSystemItem[] = data.map(r => ({
           id: r.id,
           name: r.name,
-          type: r.type as any,
+          type: r.type === 'file' ? 'dashboard' : (r.type as any),
           parentId: r.parent_id || 'root',
           data: r.data,
           createdAt: r.created_at,

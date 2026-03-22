@@ -126,7 +126,10 @@ export const FileManagerPage = ({ items, getChildren, onCreateFolder, onDelete, 
                 }
               }
             }}
-            onDoubleClick={() => {
+            onClick={(e) => {
+              // Prevent context menu state clearing from bubbling up if item is clicked
+              e.stopPropagation();
+              setCtx(null);
               if (item.type === 'folder') setCurrentFolderId(item.id);
               else onOpenItem(item);
             }}

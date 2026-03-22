@@ -529,3 +529,72 @@ export function recalculateKPI(kpi: KPI, data: SheetData, newLabel: string, newC
     trendUp: undefined,
   };
 }
+
+export function applyFilters(data: SheetData, filters: Record<string, string>): SheetData {
+  const hasActiveFilters = Object.values(filters).some(v => v !== '');
+  if (!hasActiveFilters) return data;
+  
+  const filteredRawData = data.rawData.filter(row => {
+    return Object.entries(filters).every(([col, val]) => {
+      if (!val) return true; // Empty string means no filter
+      return String(row[col] ?? '') === val;
+    });
+  });
+
+  // Rebuild columns but preserve original unique values so dropdowns don't shrink
+  const filteredData = rebuildSheetData(filteredRawData, data.fileName, data.sheetNames, data.activeSheet);
+  filteredData.columns = filteredData.columns.map(c => {
+    const originalCol = data.columns.find(oc => oc.name === c.name);
+    return { ...c, unique: originalCol?.unique };
+  });
+
+  return filteredData;
+}
+
+export function recalculateChart(chart: ChartConfig, data: SheetData): ChartConfig {
+  if (!chart.xColumn || !chart.yColumn) return chart;
+
+  const catCol = data.columns.find(c => c.name === chart.xColumn);
+  const numCol = data.columns.find(c => c.name === chart.yColumn);
+  if (!catCol || !numCol) return chart;
+
+  const grouped: Record<string, { sum: number; count: number }> = {};
+  const isDate = catCol.type === 'date';
+
+  data.rawData.forEach(row => {
+    let key = String(row[catCol.name] ?? 'N/A');
+    if (isDate) {
+      try {
+        const dt = new Date(key);
+        if (!isNaN(dt.getTime())) key = dt.toISOString().slice(0, 10);
+      } catch { /* ignore */ }
+    }
+    
+    const val = Number(row[numCol.name] ?? 0);
+    if (!isNaN(val)) {
+      if (!grouped[key]) grouped[key] = { sum: 0, count: 0 };
+      grouped[key].sum += val;
+      grouped[key].count++;
+    }
+  });
+
+  const isAvg = chart.title.toLowerCase().includes('média');
+  let entries = Object.entries(grouped)
+    .map(([label, { sum, count }]) => ({ 
+      label, 
+      value: isAvg ? (count > 0 ? sum / count : 0) : sum 
+    }))
+    .filter(e => !isNaN(e.value));
+
+  if (isDate) {
+    entries = entries.sort((a, b) => a.label.localeCompare(b.label));
+  } else {
+    entries = entries.sort((a, b) => b.value - a.value).slice(0, 12);
+  }
+  
+  // For Donut charts we slice 7 to avoid clutter
+  if (chart.type === 'donut') entries = entries.slice(0, 7);
+
+  return { ...chart, data: entries };
+}
+
