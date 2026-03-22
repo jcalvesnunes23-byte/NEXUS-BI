@@ -12,6 +12,7 @@ import { PaywallModal } from './components/PaywallModal';
 import { useFileSystem } from './hooks/useFileSystem';
 import { THEMES } from './themes';
 import { ThemeColors, SheetData, FileSystemItem, SavedDashboard } from './types';
+import { generateKPIs, generateCharts, generateLocalInsights } from './hooks/useSpreadsheet';
 import { Palette, Save, Crown, LogOut, Bell, Menu } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { useSystemData } from './hooks/useSystemData';
@@ -220,13 +221,27 @@ function App() {
     setDashboardMode(mode);
     setCurrentData(data);
     setIsImporting(false);
+    
+    let initialKpis: any[] = [];
+    let initialCharts: any[] = [];
+    let initialInsights: any[] = [];
+
+    if (mode === 'auto') {
+      initialKpis = generateKPIs(data);
+      initialCharts = generateCharts(data);
+      initialInsights = generateLocalInsights(data, initialKpis);
+    }
+
     const dashboard: SavedDashboard = {
       id: `dash-${Date.now()}`,
       name: data.fileName || 'Novo Dashboard',
       fileName: data.fileName || 'Novo Dashboard',
       savedAt: new Date().toISOString(),
       themeId: theme.id,
-      kpis: [], charts: [], insights: [], activeFilters: [],
+      kpis: initialKpis, 
+      charts: initialCharts, 
+      insights: initialInsights, 
+      activeFilters: [],
       sheetData: data
     };
     saveDashboard(dashboard, 'root');
