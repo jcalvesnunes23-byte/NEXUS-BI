@@ -1,220 +1,545 @@
-import React from 'react';
-import {
-  LayoutDashboard,
-  Database,
-  Shield,
-  Activity,
-  Search,
-  Bell,
-  ChevronRight,
-  UploadCloud,
-  Zap,
-  Lock
-} from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import { Sidebar } from './components/Sidebar';
+import { ThemePanel } from './components/ThemePanel';
+import { UploadZone } from './components/UploadZone';
+import { DashboardPage } from './pages/DashboardPage';
+import { FileManagerPage } from './pages/FileManagerPage';
+import { LandingPage } from './pages/LandingPage';
+import { LoginPage } from './pages/LoginPage';
+import { SignUpPage } from './pages/SignUpPage';
+import { PaywallModal } from './components/PaywallModal';
+import { useFileSystem } from './hooks/useFileSystem';
+import { THEMES } from './themes';
+import { ThemeColors, SheetData, FileSystemItem, SavedDashboard } from './types';
+import { Palette, Save, Crown, LogOut, Bell, Menu } from 'lucide-react';
+import { supabase } from './lib/supabase';
+import { useSystemData } from './hooks/useSystemData';
+import { NotificationPanel } from './components/NotificationPanel';
+import { ProfileModal } from './components/ProfileModal';
 
-const NavItem = ({ icon, label, active = false }: { icon: React.ReactNode, label: string, active?: boolean }) => (
-  <a href="#" className={`flex items-center gap-4 px-8 py-4 transition-all duration-300 relative group ${active ? 'text-[#bd9dff] bg-[#131319]/50' : 'text-[#a88cfb] hover:text-[#f9f5fd] hover:bg-[#131319]'}`}>
-    {active && <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-[#bd9dff] shadow-[0_0_12px_#bd9dff]" />}
-    <div className={`${active ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'} transition-opacity`}>
-      {icon}
-    </div>
-    <span className="font-body text-sm font-bold tracking-wide">{label}</span>
-  </a>
-);
+type View = 'landing' | 'login' | 'signup' | 'app';
+const FREE_IMPORT_LIMIT = 5;
 
-const Button = ({ children, variant = 'primary', className = '' }: { children: React.ReactNode, variant?: 'primary' | 'secondary', className?: string }) => {
-  const baseStyle = "px-8 py-3.5 rounded-md font-label text-sm font-bold transition-all duration-300 flex items-center justify-center gap-2 uppercase tracking-widest cursor-pointer";
-  const variants = {
-    primary: "bg-gradient-to-r from-[#bd9dff] to-[#8a4cfc] text-[#3c0089] hover:shadow-[0_0_24px_rgba(189,157,255,0.4)] hover:scale-[1.02]",
-    secondary: "bg-transparent border border-ghost text-[#bd9dff] hover:border-[#bd9dff]/50 hover:bg-[#bd9dff]/5"
-  };
-  return (
-    <button className={`${baseStyle} ${variants[variant]} ${className}`}>
-      {children}
-    </button>
-  );
+// Page transition variants
+const pageVariants = {
+  initial: { opacity: 0, y: 16 },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] } },
+  exit:    { opacity: 0, y: -12, transition: { duration: 0.25 } }
 };
 
-const Input = ({ placeholder, icon }: { placeholder: string, icon?: React.ReactNode }) => (
-  <div className="relative group w-72">
-    {icon && <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#a88cfb] group-focus-within:text-[#bd9dff] transition-colors">{icon}</div>}
-    <input
-      type="text"
-      placeholder={placeholder}
-      className={`w-full bg-[#000000] border border-ghost rounded-md py-3.5 ${icon ? 'pl-12' : 'pl-5'} pr-5 font-label text-sm text-[#f9f5fd] placeholder:text-[#48474d] focus:outline-none focus:border-[#bd9dff] focus:shadow-[0_0_16px_rgba(189,157,255,0.2)] transition-all duration-300`}
-    />
-  </div>
-);
+function App() {
+  const [theme, setTheme] = useState<ThemeColors>(THEMES['dark-purple']);
+  const [showThemePanel, setShowThemePanel] = useState(false);
+  const { items, createFolder, deleteItem, renameItem, moveItem, getChildren, saveDashboard } = useFileSystem();
 
-const KPICard = ({ title, value, unit, trend, trendUp }: { title: string, value: string, unit: string, trend: string, trendUp: boolean }) => (
-  <div className="bg-[#1f1f26] rounded-2xl p-10 shadow-kpi-glow relative overflow-hidden group">
-    <div className="absolute -inset-4 bg-gradient-to-br from-[#bd9dff]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 blur-2xl pointer-events-none" />
-    <div className="relative z-10">
-      <h3 className="font-label text-xs uppercase tracking-[0.2em] text-[#a88cfb] mb-8 font-bold">{title}</h3>
-      <div className="flex items-end justify-between">
-        <div className="flex items-baseline gap-2">
-          <p className="font-headline text-[4rem] leading-none font-bold text-[#f9f5fd] tracking-tighter">{value}</p>
-          {unit && <span className="font-headline text-2xl font-bold text-[#a88cfb]">{unit}</span>}
-        </div>
-        <div className={`flex items-center gap-1.5 font-label text-xs font-bold mb-2 px-3 py-1.5 rounded-md ${trendUp ? 'bg-[#bd9dff]/10 text-[#bd9dff]' : 'bg-[#48474d]/20 text-[#a88cfb]'}`}>
-          {trendUp ? '↑' : '↓'} {trend}
-        </div>
-      </div>
-    </div>
-  </div>
-);
+  const [activeItem, setActiveItem] = useState<FileSystemItem | null>(null);
+  const [currentData, setCurrentData] = useState<SheetData | null>(null);
+  const [dashboardMode, setDashboardMode] = useState<'auto' | 'manual' | 'saved'>('auto');
+  const activeElements = React.useRef({ kpis: [], charts: [], insights: [] });
 
-const DataRow = ({ id, name, status, date, size }: { id: string, name: string, status: string, date: string, size: string }) => (
-  <div className="flex items-center justify-between py-5 px-6 rounded-xl hover:bg-[#1f1f26] transition-all duration-300 group cursor-pointer">
-    <div className="flex items-center gap-5 w-2/5">
-      <div className="w-12 h-12 rounded-xl bg-[#000000] flex items-center justify-center text-[#bd9dff] group-hover:scale-105 group-hover:shadow-[0_0_20px_rgba(189,157,255,0.15)] transition-all duration-300">
-        <Database size={20} strokeWidth={1.5} />
-      </div>
-      <div>
-        <p className="font-body text-base font-bold text-[#f9f5fd]">{name}</p>
-        <p className="font-label text-xs text-[#a88cfb] mt-1.5 tracking-widest uppercase">{id}</p>
-      </div>
-    </div>
-    <div className="w-1/5">
-      <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md font-label text-[10px] font-bold uppercase tracking-widest ${
-        status === 'Criptografado' ? 'bg-[#bd9dff]/10 text-[#bd9dff]' : 
-        status === 'Processando' ? 'bg-[#8a4cfc]/10 text-[#8a4cfc]' : 
-        'bg-[#000000] text-[#a88cfb]'
-      }`}>
-        <span className={`w-1.5 h-1.5 rounded-full ${
-          status === 'Criptografado' ? 'bg-[#bd9dff] shadow-[0_0_8px_#bd9dff]' : 
-          status === 'Processando' ? 'bg-[#8a4cfc] animate-pulse' : 
-          'bg-[#48474d]'
-        }`}></span>
-        {status}
-      </span>
-    </div>
-    <div className="w-1/5 font-label text-sm text-[#a88cfb] font-medium">{date}</div>
-    <div className="w-1/5 text-right font-label text-sm text-[#f9f5fd] font-bold">{size}</div>
-    <div className="w-12 flex justify-end opacity-0 group-hover:opacity-100 transition-all duration-300 -translate-x-4 group-hover:translate-x-0">
-      <div className="w-8 h-8 rounded-full bg-[#25252d] flex items-center justify-center text-[#bd9dff]">
-        <ChevronRight size={16} strokeWidth={2} />
-      </div>
-    </div>
-  </div>
-);
+  const { notifications, markNotificationRead, markAllNotificationsRead } = useSystemData();
+  const [showNotifications, setShowNotifications] = useState(false);
+  const unreadCount = notifications.filter(n => !n.read).length;
 
-export default function App() {
-  return (
-    <div className="min-h-screen bg-[#0e0e13] text-[#f9f5fd] flex selection:bg-[#bd9dff]/30 selection:text-[#bd9dff] overflow-hidden font-body">
+  // Navigation
+  const [view, setView] = useState<View>('landing');
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [isImporting, setIsImporting] = useState(false);
+  const [showVault, setShowVault] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Trial / plan state
+  const [importCount, setImportCount] = useState<number>(() => {
+    return parseInt(localStorage.getItem('nexus_import_count') || '0', 10);
+  });
+  const [isPro, setIsPro] = useState<boolean>(() => {
+    return localStorage.getItem('nexus_is_pro') === 'true';
+  });
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userFullName, setUserFullName] = useState<string>('');
+  const [userAvatar, setUserAvatar] = useState<string>('');
+  const [userId, setUserId] = useState<string>('');
+  const [showProfile, setShowProfile] = useState(false);
+
+  useEffect(() => {
+    const handleProfile = async (session: any) => {
+      setUserEmail(session.user.email ?? null);
+      setUserId(session.user.id);
+      const isMaster = session.user.email === 'expandix.br@outlook.com';
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_pro, import_count, full_name, avatar_url')
+        .eq('id', session.user.id)
+        .single();
+        
+      if (profile) {
+        setIsPro(isMaster || profile.is_pro);
+        setImportCount(profile.import_count);
+        setUserFullName(profile.full_name || '');
+        setUserAvatar(profile.avatar_url || '');
+        localStorage.setItem('nexus_is_pro', String(isMaster || profile.is_pro));
+        localStorage.setItem('nexus_import_count', String(profile.import_count));
+      }
+    };
+
+    // Timeout de segurança: se algo falhar silenciosamente, o spinner não fica infinito
+    const safetyTimeout = setTimeout(() => {
+      setIsInitializing(false);
+    }, 4000);
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      try {
+        if (session?.user) {
+          // Define email/userId imediatamente (sem await) para não bloquear
+          setUserEmail(session.user.email ?? null);
+          setUserId(session.user.id);
+          const isMaster = session.user.email === 'expandix.br@outlook.com';
+          if (isMaster) setIsPro(true);
+
+          // Muda de view IMEDIATAMENTE — não espera a query do perfil
+          setView('app');
+
+          // Carrega o perfil em background sem bloquear a navegação
+          supabase
+            .from('profiles')
+            .select('is_pro, import_count, full_name, avatar_url')
+            .eq('id', session.user.id)
+            .single()
+            .then(({ data: profile }) => {
+              if (profile) {
+                setIsPro(isMaster || profile.is_pro);
+                setImportCount(profile.import_count);
+                setUserFullName(profile.full_name || '');
+                setUserAvatar(profile.avatar_url || '');
+                localStorage.setItem('nexus_is_pro', String(isMaster || profile.is_pro));
+                localStorage.setItem('nexus_import_count', String(profile.import_count));
+              }
+            });
+        } else {
+          setView('landing');
+        }
+      } finally {
+        clearTimeout(safetyTimeout);
+        setIsInitializing(false);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const reloadProfile = async () => {
+    if (!userId) return;
+    const { data: profile } = await supabase.from('profiles').select('full_name, avatar_url').eq('id', userId).single();
+    if (profile) {
+      setUserFullName(profile.full_name || '');
+      setUserAvatar(profile.avatar_url || '');
+    }
+  };
+
+  // Current inner view for animated transitions
+  const [innerView, setInnerView] = useState<'upload' | 'vault' | 'dashboard' | 'empty'>('upload');
+
+  useEffect(() => {
+    if (!isImporting && !showVault && currentData) setInnerView('dashboard');
+    else if (showVault) setInnerView('vault');
+    else if (isImporting && !currentData) setInnerView('upload');
+    else setInnerView('empty');
+  }, [isImporting, showVault, currentData]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--bg', theme.bg);
+    document.documentElement.style.setProperty('--bg-card', theme.bgCard);
+    document.documentElement.style.setProperty('--bg-input', theme.bgInput);
+    document.documentElement.style.setProperty('--primary', theme.primary);
+    document.documentElement.style.setProperty('--accent', theme.accent);
+    document.documentElement.style.setProperty('--text', theme.text);
+    document.documentElement.style.setProperty('--text-muted', theme.textMuted);
+    document.documentElement.style.setProperty('--border', theme.border);
+  }, [theme]);
+
+  const handleSelect = (item: FileSystemItem) => {
+    setActiveItem(item);
+    if (item.type === 'dashboard' && item.data) {
+      setCurrentData(item.data.sheetData ?? null);
+      setDashboardMode('saved');
+      setIsImporting(false);
+      setShowVault(false);
+    }
+  };
+
+  const handleSaveDashboard = () => {
+    if (currentData) {
+      const dashboard: SavedDashboard = {
+        id: activeItem?.id || `dash-${Date.now()}`,
+        name: activeItem?.name || currentData.fileName || 'Novo Dashboard',
+        fileName: currentData.fileName || 'Novo Dashboard',
+        savedAt: new Date().toISOString(),
+        themeId: theme.id,
+        kpis: activeElements.current.kpis,
+        charts: activeElements.current.charts,
+        insights: activeElements.current.insights,
+        activeFilters: [],
+        sheetData: currentData
+      };
+      saveDashboard(dashboard, activeItem?.parentId || 'root');
+    }
+  };
+
+  const handleUpdateData = (newData: SheetData) => {
+    setCurrentData(newData);
+    let dashboardToSave: SavedDashboard | null = null;
+    let parentId = 'root';
+    if (activeItem && activeItem.type === 'dashboard') {
+      dashboardToSave = { ...(activeItem.data as SavedDashboard), sheetData: newData };
+      parentId = activeItem.parentId || 'root';
+    } else if (currentData) {
+      const rootItems = getChildren('root');
+      const existing = rootItems.find(it => it.type === 'dashboard' && it.name === currentData.fileName.replace('.xlsx', ''));
+      if (existing && existing.data) {
+        dashboardToSave = { ...existing.data, sheetData: newData };
+      }
+    }
+    if (dashboardToSave) saveDashboard(dashboardToSave, parentId);
+  };
+
+  const handleNewImport = async (data: SheetData, mode: 'auto' | 'manual') => {
+    const newCount = importCount + 1;
+    setImportCount(newCount);
+    localStorage.setItem('nexus_import_count', String(newCount));
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      await supabase.from('profiles').update({ import_count: newCount }).eq('id', session.user.id);
+    }
+
+    setDashboardMode(mode);
+    setCurrentData(data);
+    setIsImporting(false);
+    const dashboard: SavedDashboard = {
+      id: `dash-${Date.now()}`,
+      name: data.fileName || 'Novo Dashboard',
+      fileName: data.fileName || 'Novo Dashboard',
+      savedAt: new Date().toISOString(),
+      themeId: theme.id,
+      kpis: [], charts: [], insights: [], activeFilters: [],
+      sheetData: data
+    };
+    saveDashboard(dashboard, 'root');
+  };
+
+  const handleRequestImport = () => {
+    const isMaster = userEmail === 'expandix.br@outlook.com';
+    if (!isMaster && !isPro && importCount >= FREE_IMPORT_LIMIT) {
+      setShowPaywall(true);
+    } else {
+      setIsImporting(true);
+      setShowVault(false);
+      setCurrentData(null);
+      setActiveItem(null);
+    }
+  };
+
+  const handleChoosePlan = async (plan: 'monthly' | 'annual') => {
+    // Definimos os links originais direto do Stripe fornecidos pelo usuário
+    const baseUrl = plan === 'monthly' 
+      ? 'https://buy.stripe.com/cNieVd9EcdbI03c3n8dIA00'
+      : 'https://buy.stripe.com/aFa5kD9Ec8Vs8zI3n8dIA01';
       
-      {/* Sidebar - Glassmorphism */}
-      <aside className="fixed left-0 top-0 h-full w-72 bg-[#0e0e13]/60 backdrop-blur-[40px] z-40 flex flex-col shadow-[4px_0_32px_rgba(0,0,0,0.6)]">
-        <div className="p-10 pb-6">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#bd9dff] to-[#8a4cfc] flex items-center justify-center shadow-[0_0_20px_rgba(189,157,255,0.3)]">
-              <Zap size={20} className="text-[#3c0089]" fill="currentColor" />
-            </div>
-            <div>
-              <h1 className="font-headline text-2xl font-bold text-[#f9f5fd] tracking-tight leading-none">Obsidian</h1>
-              <p className="font-label text-[9px] text-[#bd9dff] mt-1.5 tracking-[0.3em] uppercase font-bold">Sistema de Arquivos</p>
-            </div>
-          </div>
-        </div>
-        
-        <nav className="flex-1 mt-8 space-y-2">
-          <NavItem icon={<LayoutDashboard size={20} />} label="Centro de Comando" active />
-          <NavItem icon={<Database size={20} />} label="Cofres de Dados" />
-          <NavItem icon={<Shield size={20} />} label="Protocolos de Segurança" />
-          <NavItem icon={<Activity size={20} />} label="Telemetria" />
-        </nav>
-        
-        <div className="p-8 mb-4">
-          <div className="bg-[#131319] rounded-xl p-4 flex items-center gap-4 hover:bg-[#1f1f26] transition-colors cursor-pointer">
-            {/* Direct Image Link from Unsplash */}
-            <img 
-              src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80" 
-              alt="Dra. E. Vance" 
-              className="w-10 h-10 rounded-full object-cover border border-ghost" 
-              referrerPolicy="no-referrer"
-            />
-            <div>
-              <p className="font-body text-sm font-bold text-[#f9f5fd]">Dra. E. Vance</p>
-              <p className="font-label text-[10px] text-[#a88cfb] tracking-widest uppercase mt-1 font-semibold">Acesso Nível 5</p>
-            </div>
-          </div>
-        </div>
-      </aside>
-      
-      {/* Main Content */}
-      <main className="flex-1 ml-72 relative h-screen overflow-y-auto custom-scrollbar">
-        {/* Ambient background light */}
-        <div className="absolute top-[-20%] left-[10%] w-[1000px] h-[800px] bg-[#bd9dff]/[0.02] blur-[150px] rounded-full pointer-events-none" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[800px] h-[800px] bg-[#8a4cfc]/[0.03] blur-[120px] rounded-full pointer-events-none" />
-        
-        <div className="relative z-10 max-w-[1600px] mx-auto p-12 lg:p-16">
-          {/* Header */}
-          <header className="flex flex-col xl:flex-row xl:items-end justify-between gap-10 mb-20">
-            <div>
-              <h2 className="font-headline text-[4.5rem] leading-[0.9] font-bold tracking-tighter text-[#f9f5fd]">Visão Geral<br/>do Sistema</h2>
-              <p className="font-body text-lg text-[#a88cfb] mt-8 max-w-lg leading-relaxed">Métricas em tempo real e status dos cofres. Monitoramento de telemetria quântica e arquivos criptografados em todos os nós globais.</p>
-            </div>
-            <div className="flex items-center gap-6">
-              <Input placeholder="Buscar arquivos..." icon={<Search size={18} />} />
-              <button className="w-[52px] h-[52px] rounded-md bg-[#000000] flex items-center justify-center text-[#a88cfb] hover:text-[#bd9dff] hover:bg-[#131319] transition-all relative group border border-ghost cursor-pointer">
-                <Bell size={20} />
-                <span className="absolute top-3.5 right-3.5 w-2 h-2 bg-[#bd9dff] rounded-full shadow-[0_0_8px_#bd9dff] group-hover:animate-ping"></span>
-              </button>
-              <Button>Gerar Relatório</Button>
-            </div>
-          </header>
+    // Anexamos o e-mail pré-preenchido e o client_reference_id (fundamental pra saber quem pagou)
+    const checkoutUrl = `${baseUrl}?prefilled_email=${encodeURIComponent(userEmail || '')}&client_reference_id=${userId}`;
+    
+    // Redirecionamento blindado para checkout oficial.
+    window.location.href = checkoutUrl;
+  };
+
+  const enterApp = () => setView('app');
+  
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    localStorage.removeItem('nexus_auth');
+    localStorage.removeItem('nexus_is_pro');
+    localStorage.removeItem('nexus_import_count');
+    setView('landing');
+  };
+
+  const TopBar = () => (
+    <motion.header
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+      className="h-16 flex items-center justify-between px-4 md:px-8 border-b shrink-0 z-20 sticky top-0 backdrop-blur-md"
+      style={{ background: 'var(--bg)dd', borderBottomColor: 'var(--border)' }}
+    >
+      <div className="flex items-center gap-3">
+        <button 
+          onClick={() => setMobileMenuOpen(true)}
+          className="md:hidden p-2 rounded-xl transition-all hover:opacity-80"
+          style={{ background: 'var(--primary)20', color: 'var(--primary)' }}
+        >
+          <Menu size={20} />
+        </button>
+        <h2 className="font-headline font-bold text-sm md:text-base truncate max-w-[140px] md:max-w-none" style={{ color: 'var(--text)' }}>
+          {showVault ? 'Organizador de Cofres' : isImporting ? 'Nova Importação' : activeItem?.name || currentData?.fileName || 'Visão Geral'}
+        </h2>
+        {currentData && !isImporting && !showVault && (
+          <motion.span
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="text-[10px] px-2 py-0.5 rounded uppercase tracking-wider font-bold"
+            style={{ background: 'var(--primary)20', color: 'var(--accent)' }}
+          >
+            Dashboard Salvo
+          </motion.span>
+        )}
+      </div>
+      <div className="flex items-center gap-3">
+        {/* Plan badge */}
+        {isPro ? (
+          <motion.div
+            initial={{ opacity: 0, x: 10 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold"
+            style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.3), rgba(56,189,248,0.2))', border: '1px solid rgba(124,58,237,0.4)', color: '#A78BFA' }}
+          >
+            <Crown size={12} /> PRO
+          </motion.div>
+        ) : (
+          <button
+            onClick={() => setShowPaywall(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all hover:scale-105"
+            style={{ background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)', color: '#F59E0B' }}
+          >
+            <Crown size={12} />
+            Free ({Math.max(0, FREE_IMPORT_LIMIT - importCount)} import{FREE_IMPORT_LIMIT - importCount !== 1 ? 's' : ''} restante{FREE_IMPORT_LIMIT - importCount !== 1 ? 's' : ''})
+          </button>
+        )}
+        {currentData && !isImporting && !showVault && (
+          <button
+            onClick={handleSaveDashboard}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all hover:opacity-90"
+            style={{ background: 'var(--primary)', color: '#fff' }}
+          >
+            <Save size={14} /> Salvar
+          </button>
+        )}
+        <div className="relative">
+          <button
+            onClick={() => setShowNotifications(!showNotifications)}
+            className="w-10 h-10 rounded-xl flex items-center justify-center transition-all hover:scale-105 relative"
+            style={{ background: 'var(--primary)20', color: 'var(--text)' }}
+            title="Notificações"
+          >
+            <Bell size={18} />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center animate-pulse shadow-[0_0_8px_var(--primary)]"
+                style={{ background: 'var(--primary)', color: '#fff' }}>
+                {unreadCount}
+              </span>
+            )}
+          </button>
           
-          {/* KPI Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
-            <KPICard title="Tamanho Total do Cofre" value="24.8" unit="TB" trend="12.4%" trendUp={true} />
-            <KPICard title="Nós Ativos" value="1.402" unit="" trend="3.1%" trendUp={true} />
-            <KPICard title="Anomalias" value="0" unit="" trend="0.0%" trendUp={false} />
-          </div>
+          <AnimatePresence>
+            {showNotifications && (
+              <NotificationPanel
+                notifications={notifications}
+                onClose={() => setShowNotifications(false)}
+                onMarkRead={markNotificationRead}
+                onMarkAllRead={markAllNotificationsRead}
+              />
+            )}
+          </AnimatePresence>
+        </div>
 
-          {/* Content Area */}
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-            {/* Data List */}
-            <div className="xl:col-span-2 bg-[#131319] rounded-2xl p-10 shadow-ambient flex flex-col">
-              <div className="flex items-center justify-between mb-10">
-                <h3 className="font-headline text-3xl font-bold text-[#f9f5fd] tracking-tight">Arquivos Recentes</h3>
-                <Button variant="secondary" className="py-2.5 px-6 text-xs">Ver Todos</Button>
-              </div>
-              
-              <div className="flex-1 flex flex-col gap-2">
-                <DataRow id="ARC-2023-001" name="Dados de Telemetria Quântica" status="Criptografado" date="24 Out, 2023" size="4.2 TB" />
-                <DataRow id="ARC-2023-002" name="Logs Comportamentais de Usuários" status="Processando" date="23 Out, 2023" size="850 GB" />
-                <DataRow id="ARC-2023-003" name="Livro-razão Financeiro Q3" status="Criptografado" date="21 Out, 2023" size="1.1 TB" />
-                <DataRow id="ARC-2023-004" name="Backups de Sistema Alpha" status="Criptografado" date="20 Out, 2023" size="12.5 TB" />
-                <DataRow id="ARC-2023-005" name="Pesos de Rede Neural" status="Arquivado" date="18 Out, 2023" size="8.9 TB" />
-              </div>
-            </div>
+        <button
+          onClick={() => setShowThemePanel(true)}
+          className="w-10 h-10 rounded-xl flex items-center justify-center transition-all hover:scale-105"
+          style={{ background: 'var(--primary)20', color: 'var(--primary)' }}
+          title="Alterar Tema"
+        >
+          <Palette size={18} />
+        </button>
+        <button
+          onClick={handleSignOut}
+          className="w-10 h-10 rounded-xl flex items-center justify-center transition-all hover:bg-red-500/20 text-slate-400 hover:text-red-400"
+          title="Sair da Conta"
+        >
+          <LogOut size={18} />
+        </button>
+      </div>
+    </motion.header>
+  );
 
-            {/* Upload Panel */}
-            <div className="bg-[#1f1f26] rounded-2xl p-10 shadow-kpi-glow flex flex-col relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-[#bd9dff]/5 to-transparent rounded-full blur-3xl pointer-events-none" />
-              
-              <h3 className="font-headline text-2xl font-bold text-[#f9f5fd] tracking-tight mb-2">Upload Seguro</h3>
-              <p className="font-body text-sm text-[#a88cfb] mb-8">Inicialize o protocolo de criptografia quântica para novos conjuntos de dados.</p>
-              
-              <div className="flex-1 border-2 border-dashed border-ghost rounded-xl flex flex-col items-center justify-center p-8 text-center hover:border-[#bd9dff]/50 hover:bg-[#bd9dff]/5 transition-all duration-300 cursor-pointer group mb-8">
-                <div className="w-16 h-16 rounded-full bg-[#000000] flex items-center justify-center text-[#a88cfb] group-hover:text-[#bd9dff] group-hover:scale-110 transition-all duration-300 mb-6 shadow-[0_0_20px_rgba(0,0,0,0.5)]">
-                  <UploadCloud size={28} />
-                </div>
-                <p className="font-body text-base font-bold text-[#f9f5fd] mb-2">Arraste e Solte Arquivos</p>
-                <p className="font-label text-xs text-[#a88cfb]">ou clique para procurar nos nós locais</p>
-              </div>
-              
-              <div className="bg-[#000000] rounded-xl p-5 flex items-start gap-4 border border-ghost">
-                <Lock size={18} className="text-[#bd9dff] shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-label text-xs font-bold text-[#f9f5fd] mb-1">Criptografia AES-256 Ativa</p>
-                  <p className="font-label text-[10px] text-[#a88cfb] leading-relaxed">Todos os arquivos são criptografados automaticamente antes de saírem do ambiente local.</p>
-                </div>
-              </div>
-            </div>
+  // ===== Auth pages & Landing =====
+  if (isInitializing) return (
+    <div className="flex h-screen items-center justify-center" style={{ background: 'var(--bg)' }}>
+      <div className="w-12 h-12 border-4 rounded-full animate-spin" style={{ borderColor: 'var(--primary) transparent transparent transparent' }} />
+    </div>
+  );
+  if (view === 'landing') return (
+    <LandingPage onEnter={() => setView('login')} onLogin={() => setView('login')} onSignUp={() => setView('signup')} />
+  );
+  if (view === 'login') return (
+    <LoginPage onLogin={enterApp} onGoToSignUp={() => setView('signup')} onBack={() => setView('landing')} />
+  );
+  if (view === 'signup') return (
+    <SignUpPage onSignUp={enterApp} onGoToLogin={() => setView('login')} onBack={() => setView('landing')} />
+  );
+
+  // ===== Main App =====
+  return (
+    <div className="flex h-screen w-full overflow-hidden" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
+      <Sidebar
+        items={items}
+        activeId={activeItem?.id || null}
+        onSelect={(item) => { handleSelect(item); setMobileMenuOpen(false); }}
+        onCreateFolder={createFolder}
+        onDelete={deleteItem}
+        onRename={renameItem}
+        onMove={moveItem}
+        getChildren={getChildren}
+        onImport={() => { handleRequestImport(); setMobileMenuOpen(false); }}
+        onOpenVault={() => { setShowVault(true); setIsImporting(false); setActiveItem(null); setMobileMenuOpen(false); }}
+        mobileOpen={mobileMenuOpen}
+        onCloseMobile={() => setMobileMenuOpen(false)}
+        userFullName={userFullName}
+        userAvatar={userAvatar}
+        onProfileClick={() => setShowProfile(true)}
+      />
+
+      <main className="flex-1 flex flex-col md:ml-64 overflow-hidden relative w-full">
+        <TopBar />
+
+        <div className="flex-1 overflow-y-auto w-full custom-scrollbar" style={{ padding: showVault ? '0' : '1rem md:p-8' }}>
+          <div className={`mx-auto w-full ${showVault ? 'h-full' : 'max-w-7xl'}`}>
+
+            {/* Animated inner view switcher */}
+            <AnimatePresence mode="wait">
+
+              {innerView === 'vault' && (
+                <motion.div key="vault" {...pageVariants}>
+                  <FileManagerPage
+                    items={items}
+                    getChildren={getChildren}
+                    onCreateFolder={createFolder}
+                    onDelete={deleteItem}
+                    onRename={renameItem}
+                    onMove={moveItem}
+                    onOpenItem={handleSelect}
+                  />
+                </motion.div>
+              )}
+
+              {innerView === 'upload' && (
+                <motion.div key="upload" {...pageVariants}>
+                  <UploadZone onData={handleNewImport} />
+                </motion.div>
+              )}
+
+              {innerView === 'dashboard' && currentData && (
+                <motion.div key="dashboard" {...pageVariants}>
+                  <DashboardPage
+                    data={currentData}
+                    theme={theme}
+                    title={activeItem?.name || currentData.fileName || 'Dashboard'}
+                    mode={dashboardMode}
+                    savedKpis={activeItem?.data?.kpis}
+                    savedCharts={activeItem?.data?.charts}
+                    savedInsights={activeItem?.data?.insights}
+                    onUpdateData={handleUpdateData}
+                    onChangeElements={(k, c, i) => {
+                      activeElements.current = { kpis: k as any, charts: c as any, insights: i as any };
+                    }}
+                  />
+                </motion.div>
+              )}
+
+              {innerView === 'empty' && (
+                <motion.div key="empty" {...pageVariants} className="flex flex-col items-center justify-center h-full min-h-[50vh] text-center">
+                  <motion.div
+                    animate={{ scale: [1, 1.06, 1], rotate: [0, 3, -3, 0] }}
+                    transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+                    className="w-16 h-16 rounded-2xl mb-4 flex items-center justify-center"
+                    style={{ background: 'var(--primary)15' }}
+                  >
+                    <span className="text-3xl">🔮</span>
+                  </motion.div>
+                  <h3 className="font-headline text-2xl font-bold mb-2" style={{ color: 'var(--text)' }}>Bem-vindo ao NEXUS BI</h3>
+                  <p className="max-w-md mx-auto mb-6" style={{ color: 'var(--text-muted)' }}>
+                    Importe uma planilha ou selecione um dashboard salvo para começar.
+                  </p>
+                  <div className="flex gap-4">
+                    <button
+                      onClick={handleRequestImport}
+                      className="px-6 py-3 rounded-xl font-bold text-white transition-all hover:scale-105 shadow-lg shadow-purple-500/20"
+                      style={{ background: 'linear-gradient(135deg, var(--primary), var(--accent))' }}
+                    >
+                      Nova Importação
+                    </button>
+                    <button
+                      onClick={() => { setShowVault(true); setIsImporting(false); }}
+                      className="px-6 py-3 rounded-xl font-bold transition-all hover:scale-105"
+                      style={{ background: 'var(--bg-input)', color: 'var(--text)', border: '1px solid var(--border)' }}
+                    >
+                      Abrir Cofres
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+
+            </AnimatePresence>
           </div>
         </div>
       </main>
+
+      {/* Theme Panel */}
+      <AnimatePresence>
+        {showThemePanel && (
+          <motion.div
+            key="theme"
+            initial={{ x: 320, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: 320, opacity: 0 }}
+            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+            className="absolute right-0 top-0 h-full z-50"
+          >
+            <ThemePanel current={theme} onSelect={setTheme} onClose={() => setShowThemePanel(false)} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Paywall Modal */}
+      <AnimatePresence>
+        {showPaywall && (
+          <PaywallModal
+            onClose={() => setShowPaywall(false)}
+            onChoosePlan={handleChoosePlan}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showProfile && (
+          <ProfileModal
+            isOpen={showProfile}
+            onClose={() => setShowProfile(false)}
+            email={userEmail || ''}
+            isPro={isPro}
+            importCount={importCount}
+            userId={userId}
+            fullName={userFullName}
+            avatarUrl={userAvatar}
+            onProfileUpdated={reloadProfile}
+          />
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }
+
+export default App;
