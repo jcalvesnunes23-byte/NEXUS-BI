@@ -60,13 +60,30 @@ export const FileManagerPage = ({ items, currentFolderId, onNavigateFolder, getC
         <div className="flex items-center gap-2 text-xl font-headline font-bold">
           {getBreadcrumbs().map((crumb, idx, arr) => (
             <React.Fragment key={crumb.id}>
-              <button 
-                onClick={() => onNavigateFolder(crumb.id)}
-                className="hover:opacity-70 transition-opacity"
-                style={{ color: idx === arr.length - 1 ? 'var(--text)' : 'var(--text-muted)' }}
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDragOver(crumb.id);
+                }}
+                onDragLeave={() => setIsDragOver(null)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDragOver(null);
+                  const draggedId = e.dataTransfer.getData('text/plain');
+                  if (draggedId) {
+                    onMove(draggedId, crumb.id);
+                  }
+                }}
               >
-                {crumb.name}
-              </button>
+                <button 
+                  onClick={() => onNavigateFolder(crumb.id)}
+                  className={`px-2 py-1 rounded-lg transition-all ${isDragOver === crumb.id ? 'bg-white/10 ring-2 ring-purple-500 scale-105' : 'hover:opacity-70'}`}
+                  style={{ color: idx === arr.length - 1 ? 'var(--text)' : 'var(--text-muted)' }}
+                >
+                  {crumb.name}
+                </button>
+              </div>
               {idx < arr.length - 1 && <ChevronRight size={18} style={{ color: 'var(--text-muted)' }} />}
             </React.Fragment>
           ))}
@@ -197,6 +214,18 @@ export const FileManagerPage = ({ items, currentFolderId, onNavigateFolder, getC
             <Pencil size={14} /> Renomear
           </button>
           <hr style={{ borderColor: 'var(--border)', margin: '4px 0' }} />
+          {currentFolderId !== 'root' && (
+            <>
+              <button 
+                onClick={() => { onMove(ctx.id, 'root'); setCtx(null); }} 
+                className="w-full flex items-center gap-3 px-4 py-3 hover:opacity-70 transition-opacity text-sm font-bold" 
+                style={{ color: 'var(--text)' }}
+              >
+                <Folder size={14} /> Mover para a Raiz
+              </button>
+              <hr style={{ borderColor: 'var(--border)', margin: '4px 0' }} />
+            </>
+          )}
           <button 
             onClick={() => { onDelete(ctx.id); setCtx(null); }} 
             className="w-full flex items-center gap-3 px-4 py-3 hover:opacity-70 transition-opacity text-sm font-bold" 
