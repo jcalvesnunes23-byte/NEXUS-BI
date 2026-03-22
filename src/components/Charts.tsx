@@ -1,4 +1,5 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { ChartConfig } from '../types';
 
 const CHART_H = 220;
@@ -17,11 +18,11 @@ const initTooltip: TooltipState = { visible: false, x: 0, y: 0, label: '', value
 
 const Tooltip = ({ t }: { t: TooltipState }) => {
   if (!t.visible) return null;
-  return (
+  return createPortal(
     <div
-      className="fixed z-50 pointer-events-none px-3 py-2 rounded-xl text-xs shadow-2xl"
+      className="fixed z-[9999] pointer-events-none px-3 py-2 rounded-xl text-xs shadow-2xl"
       style={{
-        left: t.x + 14, top: t.y - 10,
+        left: t.x + 14, top: t.y + 14,
         background: 'rgba(12,8,30,0.96)',
         border: '1px solid rgba(139,92,246,0.4)',
         backdropFilter: 'blur(12px)',
@@ -39,7 +40,8 @@ const Tooltip = ({ t }: { t: TooltipState }) => {
         </div>
       )}
       {t.extra && <div className="mt-0.5 text-[10px]" style={{ color: 'var(--text-muted)' }}>{t.extra}</div>}
-    </div>
+    </div>,
+    document.body
   );
 };
 

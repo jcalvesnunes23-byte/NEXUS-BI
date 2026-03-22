@@ -51,24 +51,15 @@ export function useSystemData() {
   const fetchAll = async () => {
     try {
       setLoading(true);
-      const [notifs, nodes, sec, evts, metrics] = await Promise.all([
-        supabase.from('system_notifications').select('*').order('created_at', { ascending: false }),
+      const [nodes, sec, evts, metrics] = await Promise.all([
         supabase.from('node_activity').select('*'),
         supabase.from('security_protocols').select('*'),
         supabase.from('system_events').select('*').order('created_at', { ascending: false }),
         supabase.from('telemetry_metrics').select('*').order('order_index', { ascending: true })
       ]);
 
-      if (notifs.data) {
-        setNotifications(notifs.data.map(n => ({
-          id: n.id,
-          title: n.title,
-          message: n.message,
-          time: n.time_label,
-          read: n.is_read,
-          type: n.type as any
-        })));
-      }
+      // Clear notifications as requested by user
+      setNotifications([]);
 
       if (nodes.data) setNodeActivities(nodes.data);
       if (sec.data) setSecurityProtocols(sec.data);
@@ -85,7 +76,6 @@ export function useSystemData() {
     fetchAll();
 
     const notifSub = supabase.channel('notif_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'system_notifications' }, fetchAll)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'system_events' }, fetchAll)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'node_activity' }, fetchAll)
       .subscribe();
