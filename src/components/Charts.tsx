@@ -6,15 +6,26 @@ const CHART_H = 220;
 
 interface ChartProps { config: ChartConfig; colors: string[]; onRemove?: (id: string) => void; }
 
-const fmt = (n: number) => {
+const isRatioCol = (name: string): boolean => {
+  const lower = name.toLowerCase();
+  return lower.includes('%') || lower.includes('percent') || lower.includes('taxa') ||
+         lower.includes('eficiência') || lower.includes('eficiencia') || lower.includes('rendimento') ||
+         lower.includes('porcentagem') || lower.includes('ratio') || lower.includes('rate');
+};
+
+const fmt = (n: number, isPct: boolean = false) => {
+  if (isPct) {
+    const pctVal = Math.abs(n) <= 1 ? n * 100 : n;
+    return pctVal.toFixed(1) + '%';
+  }
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
   if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
   return n % 1 === 0 ? n.toLocaleString('pt-BR') : n.toFixed(2);
 };
 
 // ─── Tooltip flutuante ───────────────────────────────────────────────────────
-interface TooltipState { visible: boolean; x: number; y: number; label: string; value: number; pct?: number; extra?: string; }
-const initTooltip: TooltipState = { visible: false, x: 0, y: 0, label: '', value: 0 };
+interface TooltipState { visible: boolean; x: number; y: number; label: string; value: number; isPct?: boolean; pct?: number; extra?: string; }
+const initTooltip: TooltipState = { visible: false, x: 0, y: 0, label: '', value: 0, isPct: false };
 
 const Tooltip = ({ t }: { t: TooltipState }) => {
   if (!t.visible) return null;
@@ -32,7 +43,7 @@ const Tooltip = ({ t }: { t: TooltipState }) => {
     >
       <div className="font-bold mb-1" style={{ color: 'var(--text)' }}>{t.label}</div>
       <div style={{ color: '#a78bfa' }}>
-        <span className="text-white font-bold">{fmt(t.value)}</span>
+        <span className="text-white font-bold">{fmt(t.value, t.isPct)}</span>
       </div>
       {t.pct !== undefined && (
         <div className="mt-0.5" style={{ color: 'var(--text-muted)' }}>
@@ -48,6 +59,7 @@ const Tooltip = ({ t }: { t: TooltipState }) => {
 // ─── Bar Chart ───────────────────────────────────────────────────────────────
 const BarChart = ({ config, colors }: ChartProps) => {
   const [tooltip, setTooltip] = useState<TooltipState>(initTooltip);
+  const isPct = isRatioCol(config.yColumn);
   const total = config.data.reduce((a, d) => a + d.value, 0) || 1;
   const max = Math.max(...config.data.map(d => d.value), 1);
   const avg = total / config.data.length;
@@ -57,9 +69,9 @@ const BarChart = ({ config, colors }: ChartProps) => {
       <Tooltip t={tooltip} />
       {/* Totals bar header */}
       <div className="flex items-center justify-between mb-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>
-        <span>Total: <strong style={{ color: 'var(--text)' }}>{fmt(total)}</strong></span>
-        <span>Média: <strong style={{ color: 'var(--text)' }}>{fmt(avg)}</strong></span>
-        <span>Máx: <strong style={{ color: '#a78bfa' }}>{fmt(max)}</strong></span>
+        <span>Total: <strong style={{ color: 'var(--text)' }}>{fmt(total, isPct)}</strong></span>
+        <span>Média: <strong style={{ color: 'var(--text)' }}>{fmt(avg, isPct)}</strong></span>
+        <span>Máx: <strong style={{ color: '#a78bfa' }}>{fmt(max, isPct)}</strong></span>
       </div>
       <div className="w-full">
         <div className="flex items-end gap-1.5 w-full" style={{ height: CHART_H }}>
@@ -73,14 +85,14 @@ const BarChart = ({ config, colors }: ChartProps) => {
                 style={{ height: '100%' }}
                 onMouseMove={e => setTooltip({
                   visible: true, x: e.clientX, y: e.clientY,
-                  label: d.label, value: d.value,
+                  label: d.label, value: d.value, isPct,
                   pct: (d.value / total) * 100,
                   extra: isAboveAvg ? `↑ ${(((d.value - avg) / avg) * 100).toFixed(1)}% acima da média` : `↓ ${(((avg - d.value) / avg) * 100).toFixed(1)}% abaixo da média`,
                 })}
                 onMouseLeave={() => setTooltip(initTooltip)}
               >
                 <span className="text-[9px] font-bold" style={{ color: 'var(--text-muted)' }}>
-                  {fmt(d.value)}
+                  {fmt(d.value, isPct)}
                 </span>
                 <div
                   className="w-full rounded-t-md transition-all duration-500 hover:brightness-125"
@@ -107,7 +119,7 @@ const BarChart = ({ config, colors }: ChartProps) => {
         {/* Avg reference line visual */}
         <div className="mt-3 flex items-center gap-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>
           <div className="w-4 h-0.5 border-t border-dashed" style={{ borderColor: '#a78bfa80' }} />
-          Linha de referência = média ({fmt(avg)})
+          Linha de referência = média ({fmt(avg, isPct)})
         </div>
       </div>
     </>
@@ -117,6 +129,7 @@ const BarChart = ({ config, colors }: ChartProps) => {
 // ─── Line / Area Chart ───────────────────────────────────────────────────────
 const LineChart = ({ config, colors }: ChartProps) => {
   const [tooltip, setTooltip] = useState<TooltipState>(initTooltip);
+  const isPct = isRatioCol(config.yColumn);
   const svgRef = useRef<SVGSVGElement>(null);
   const W = 500, H = CHART_H, PAD = 32;
   const vals = config.data.map(d => d.value);
@@ -138,9 +151,9 @@ const LineChart = ({ config, colors }: ChartProps) => {
     <>
       <Tooltip t={tooltip} />
       <div className="flex items-center justify-between mb-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>
-        <span>Total: <strong style={{ color: 'var(--text)' }}>{fmt(total)}</strong></span>
-        <span>Média: <strong style={{ color: 'var(--text)' }}>{fmt(avg)}</strong></span>
-        <span>Pico: <strong style={{ color: '#a78bfa' }}>{fmt(max)}</strong></span>
+        <span>Total: <strong style={{ color: 'var(--text)' }}>{fmt(total, isPct)}</strong></span>
+        <span>Média: <strong style={{ color: 'var(--text)' }}>{fmt(avg, isPct)}</strong></span>
+        <span>Pico: <strong style={{ color: '#a78bfa' }}>{fmt(max, isPct)}</strong></span>
       </div>
       <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="none" style={{ height: CHART_H }}>
         <defs>
@@ -164,7 +177,7 @@ const LineChart = ({ config, colors }: ChartProps) => {
               className="cursor-pointer"
               onMouseMove={e => setTooltip({
                 visible: true, x: e.clientX, y: e.clientY,
-                label: p.d.label, value: p.d.value,
+                label: p.d.label, value: p.d.value, isPct,
                 extra: i > 0 ? `vs anterior: ${p.d.value >= pts[i-1].d.value ? '▲' : '▼'} ${Math.abs(((p.d.value - pts[i-1].d.value) / (pts[i-1].d.value || 1)) * 100).toFixed(1)}%` : 'Primeiro ponto',
               })}
               onMouseLeave={() => setTooltip(initTooltip)}
@@ -181,6 +194,7 @@ const LineChart = ({ config, colors }: ChartProps) => {
 const DonutChart = ({ config, colors }: ChartProps) => {
   const [tooltip, setTooltip] = useState<TooltipState>(initTooltip);
   const [hovered, setHovered] = useState<number | null>(null);
+  const isPct = isRatioCol(config.yColumn);
   const total = config.data.reduce((a, d) => a + d.value, 0) || 1;
   const R = 65, r = 38, cx = 85, cy = 80;
   let angle = -Math.PI / 2;
@@ -202,7 +216,7 @@ const DonutChart = ({ config, colors }: ChartProps) => {
       <div className="flex items-center gap-3">
         <svg viewBox="0 0 170 160" className="shrink-0" style={{ width: 140, height: 130 }}>
           <text x={cx} y={cy - 6} textAnchor="middle" fontSize="9" fill="var(--text-muted)">Total</text>
-          <text x={cx} y={cy + 8} textAnchor="middle" fontSize="12" fontWeight="bold" fill="var(--text)">{fmt(total)}</text>
+          <text x={cx} y={cy + 8} textAnchor="middle" fontSize="12" fontWeight="bold" fill="var(--text)">{fmt(total, isPct)}</text>
           {slices.map((s, i) => (
             <path
               key={i}
@@ -213,7 +227,7 @@ const DonutChart = ({ config, colors }: ChartProps) => {
               transform={hovered === i ? `translate(${Math.cos((angle - Math.PI / 2) / slices.length) * 4}, ${Math.sin((angle - Math.PI / 2) / slices.length) * 4})` : ''}
               onMouseMove={e => {
                 setHovered(i);
-                setTooltip({ visible: true, x: e.clientX, y: e.clientY, label: s.label, value: s.value, pct: s.pct });
+                setTooltip({ visible: true, x: e.clientX, y: e.clientY, label: s.label, value: s.value, isPct, pct: s.pct });
               }}
               onMouseLeave={() => { setHovered(null); setTooltip(initTooltip); }}
             />
@@ -230,7 +244,7 @@ const DonutChart = ({ config, colors }: ChartProps) => {
             >
               <div className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: s.color }} />
               <span className="text-[10px] truncate flex-1" style={{ color: 'var(--text-muted)' }} title={s.label}>{s.label}</span>
-              <span className="text-[10px] font-bold shrink-0" style={{ color: 'var(--text)' }}>{fmt(s.value)}</span>
+              <span className="text-[10px] font-bold shrink-0" style={{ color: 'var(--text)' }}>{fmt(s.value, isPct)}</span>
               <span className="text-[10px] shrink-0" style={{ color: s.color }}>{s.pct.toFixed(1)}%</span>
             </div>
           ))}

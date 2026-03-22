@@ -128,6 +128,28 @@ export async function readSpreadsheet(file: File, sheetName?: string): Promise<S
   return rebuildSheetData(raw, file.name, sheetNames, active);
 }
 
+export const isRatioColumn = (col: SheetColumn | undefined): boolean => {
+  if (!col) return false;
+  const name = col.name.toLowerCase();
+  if (name.includes('%') || name.includes('percent') || name.includes('taxa') ||
+      name.includes('eficiência') || name.includes('eficiencia') || name.includes('rendimento') ||
+      name.includes('porcentagem') || name.includes('ratio') || name.includes('rate')) return true;
+  // Se todos os valores são entre 0 e 1, provavelmente é uma taxa decimal
+  const nums = col.values.filter(v => typeof v === 'number') as number[];
+  if (nums.length > 2 && nums.every(n => n >= 0 && n <= 1)) return true;
+  return false;
+};
+
+export const formatValue = (n: number, isRatio: boolean) => {
+  if (isRatio) {
+    const pctVal = Math.abs(n) <= 1 ? n * 100 : n;
+    return pctVal.toFixed(1) + '%';
+  }
+  if (Math.abs(n) >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
+  if (Math.abs(n) >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+  return n % 1 === 0 ? n.toLocaleString('pt-BR') : n.toFixed(2);
+};
+
 export function generateKPIs(data: SheetData): KPI[] {
   const kpis: KPI[] = [];
   const numericCols = data.columns.filter(c => c.type === 'numeric');
@@ -156,16 +178,7 @@ export function generateKPIs(data: SheetData): KPI[] {
   }
 
   // Determina se uma coluna é do tipo "taxa/porcentagem" para usar média
-  const isRatioColumn = (col: SheetColumn): boolean => {
-    const name = col.name.toLowerCase();
-    if (name.includes('%') || name.includes('percent') || name.includes('taxa') ||
-        name.includes('eficiência') || name.includes('eficiencia') || name.includes('rendimento') ||
-        name.includes('porcentagem') || name.includes('ratio') || name.includes('rate')) return true;
-    // Se todos os valores são entre 0 e 1, provavelmente é uma taxa decimal
-    const nums = col.values.filter(v => typeof v === 'number') as number[];
-    if (nums.length > 2 && nums.every(n => n >= 0 && n <= 1)) return true;
-    return false;
-  };
+  // Agora usa isRatioColumn global
 
   // Ordena por volume (soma) — exceto colunas de taxa que usam média
   const colStats = numericCols.map(col => {
@@ -184,17 +197,6 @@ export function generateKPIs(data: SheetData): KPI[] {
   colStats.slice(0, 8).forEach(({ col, nums, sum, avg, isRatio }, i) => {
     // Para colunas de porcentagem/taxa, usa MÉDIA. Para volume, usa SOMA.
     const displayValue = isRatio ? avg : sum;
-    
-    const formatVal = (n: number, pct: boolean) => {
-      if (pct) {
-        // Se os valores são decimais (0.68), converte para %
-        const pctVal = n <= 1 ? n * 100 : n;
-        return pctVal.toFixed(1) + '%';
-      }
-      if (Math.abs(n) >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
-      if (Math.abs(n) >= 1_000) return (n / 1_000).toFixed(1) + 'K';
-      return n.toFixed(n % 1 === 0 ? 0 : 2);
-    };
 
     let trend = 0;
     let trendUp = false;
@@ -213,7 +215,7 @@ export function generateKPIs(data: SheetData): KPI[] {
     kpis.push({
       id: `kpi-${i}`,
       label: labelPrefix + col.name,
-      value: formatVal(displayValue, isRatio),
+      value: formatValue(displayValue, isRatio),
       rawValue: displayValue,
       trend: showTrend ? Math.abs(trend) : undefined,
       trendUp: showTrend ? trendUp : undefined,
@@ -227,7 +229,7 @@ export function generateKPIs(data: SheetData): KPI[] {
       kpis.push({
         id: `kpi-avg-${i}`,
         label: `Média — ${col.name}`,
-        value: formatVal(avgVal, false),
+        value: formatValue(avgVal, false),
         rawValue: avgVal,
         icon: '📊',
         column: col.name,
@@ -387,12 +389,6 @@ export function generateLocalInsights(data: SheetData, kpis: KPI[]): InsightCard
   const numericCols = data.columns.filter(c => c.type === 'numeric');
   const categoricalCols = data.columns.filter(c => c.type === 'categorical');
 
-  const fmt = (n: number) => {
-    if (Math.abs(n) >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
-    if (Math.abs(n) >= 1_000) return (n / 1_000).toFixed(1) + 'K';
-    return n.toFixed(n % 1 === 0 ? 0 : 2);
-  };
-
   // --- Insight 1: KPI principal + leitura gerencial ---
   if (kpis.length > 0) {
     const k = kpis[0];
@@ -401,11 +397,12 @@ export function generateLocalInsights(data: SheetData, kpis: KPI[]): InsightCard
     const avg = nums.length > 0 ? nums.reduce((a, b) => a + b, 0) / nums.length : 0;
     const max = nums.length > 0 ? Math.max(...nums) : 0;
     const deviation = avg > 0 ? ((max - avg) / avg) * 100 : 0;
+    const isRatio = isRatioColumn(numCol);
 
     insights.push({
       id: 'ins-1', number: 1, type: 'highlight',
       title: `Visão Estratégica — ${k.label}`,
-      text: `O total acumulado é ${k.value}, com média por registro de ${fmt(avg)}. O pico máximo registrado atinge ${fmt(max)}, ${deviation.toFixed(0)}% acima da média — indicando forte concentração pontual.`,
+      text: `O total acumulado é ${k.value}, com média por registro de ${formatValue(avg, isRatio)}. O pico máximo registrado atinge ${formatValue(max, isRatio)}, ${deviation.toFixed(0)}% acima da média — indicando forte concentração pontual.`,
       action: `Analise quais registros geram os picos e se representam padrão recorrente ou exceção.`,
     });
   }
@@ -432,6 +429,7 @@ export function generateLocalInsights(data: SheetData, kpis: KPI[]): InsightCard
         if (accumulated / total >= 0.8) break;
       }
       const topPct = ((sorted[0][1] / total) * 100).toFixed(1);
+      const isRatio = isRatioColumn(numCol);
       const paretoMsg = paretoCount <= Math.ceil(sorted.length * 0.3)
         ? `Atenção ao Princípio de Pareto: apenas ${paretoCount} de ${sorted.length} categorias respondem por 80% do volume total.`
         : `A distribuição é relativamente equilibrada entre as ${sorted.length} categorias.`;
@@ -439,7 +437,7 @@ export function generateLocalInsights(data: SheetData, kpis: KPI[]): InsightCard
       insights.push({
         id: 'ins-2', number: 2, type: paretoCount <= Math.ceil(sorted.length * 0.3) ? 'alert' : 'trend',
         title: `Concentração em ${catCol.name}`,
-        text: `"${sorted[0][0]}" domina com ${topPct}% do volume de ${numCol.name} (${fmt(sorted[0][1])}). ${paretoMsg}`,
+        text: `"${sorted[0][0]}" domina com ${topPct}% do volume de ${numCol.name} (${formatValue(sorted[0][1], isRatio)}). ${paretoMsg}`,
         action: `Reduza dependência de poucos itens. Avalie se a concentração é risco ou vantagem competitiva.`,
       });
     }
@@ -449,10 +447,11 @@ export function generateLocalInsights(data: SheetData, kpis: KPI[]): InsightCard
       const [lastName, lastVal] = sorted[sorted.length - 1];
       const avgCat = total / sorted.length;
       const gapPct = avgCat > 0 ? ((avgCat - lastVal) / avgCat) * 100 : 0;
+      const isRatio = isRatioColumn(numCol);
       insights.push({
         id: 'ins-3', number: 3, type: 'suggestion',
         title: `Oportunidade em "${lastName}"`,
-        text: `"${lastName}" registra ${fmt(lastVal)} em ${numCol.name}, ${gapPct.toFixed(0)}% abaixo da média das categorias (${fmt(avgCat)}). Há espaço real de melhoria.`,
+        text: `"${lastName}" registra ${formatValue(lastVal, isRatio)} em ${numCol.name}, ${gapPct.toFixed(0)}% abaixo da média das categorias (${formatValue(avgCat, isRatio)}). Há espaço real de melhoria.`,
         action: `Investigue gargalos operacionais ou de demanda para "${lastName}" e implante plano de ação específico.`,
       });
     }
@@ -512,11 +511,7 @@ export function recalculateKPI(kpi: KPI, data: SheetData, newLabel: string, newC
     rawValue = col.values.filter(v => v !== null && v !== '').length;
   }
 
-  const formatVal = (n: number) => {
-    if (Math.abs(n) >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
-    if (Math.abs(n) >= 1_000) return (n / 1_000).toFixed(1) + 'K';
-    return n.toFixed(n % 1 === 0 ? 0 : 2);
-  };
+  const isRatio = isRatioColumn(col);
 
   return {
     ...kpi,
@@ -524,7 +519,7 @@ export function recalculateKPI(kpi: KPI, data: SheetData, newLabel: string, newC
     column: newColumn,
     aggregation,
     rawValue,
-    value: formatVal(rawValue),
+    value: formatValue(rawValue, isRatio),
     trend: undefined,
     trendUp: undefined,
   };
